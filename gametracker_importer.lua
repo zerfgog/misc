@@ -61,6 +61,7 @@ function GTImport.Clean(data)
 	}
 
 	local map = {
+		[1] = ret.ranks,
 		[2] = ret.names,
 		[4] = ret.scores,
 		[5] = ret.playtimes,
@@ -83,6 +84,7 @@ function GTImport.Clean(data)
 	local ret2 = {}
 	for i = 1, #ret.names do
 		ret2[#ret2 + 1] = {
+			rank = ret.ranks[i],
 			name = ret.names[i],
 			score = ret.scores[i],
 			playtime = ret.playtimes[i],
@@ -97,7 +99,7 @@ function GTImport.ProcessHTML(rawhtml)
 	local tblstart = string.find(rawhtml, "<table class=\"table_lst table_lst_spn\">")
 	local tblend = string.find(rawhtml, "</table>")
 
-	if (not tblstart) or (not tblend) then
+	if (!tblstart) or (!tblend) then
 		printerr("Couldn't find table of data in HTML!")
 
 		return
