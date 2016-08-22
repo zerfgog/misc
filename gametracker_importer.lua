@@ -1,75 +1,107 @@
 -- Gametracker importer by Zerf (STEAM_0:0:46161927)
 --[[ Example:
 concommand.Add("gametracker_try", function(srvcon, cmd, args)
-	GTImport.Run("66.150.188.121:27015", 8, 1, function(mastertbl)
+	GTImport.Run("66.150.188.121:27015", 8, 3, function(mastertbl)
 		PrintTable(mastertbl)
 		file.Write("gametracker_0-400.txt", util.TableToJSON(mastertbl))
 	end)
 end)
 --]]
 local function printerr(str)
-	MsgC(Color(255, 0, 0), "[GAMETRACKER ERR]: "..str.."\n")
+	MsgC(Color(255, 0, 0), "[GAMETRACKER ERR]: " .. str .. "\n")
 end
 
 local GTImport = {}
 
 function GTImport.Run(srvip, pagecount, startpage, callback)
-	startpage = startpage or 1
 	local ret = {}
-	for i = 0, pagecount-1 do
-		local page = startpage + i
-		local url = "http://www.gametracker.com/server_info/"..srvip.."/top_players/?searchipp=50&searchpge="..page
-		http.Fetch(url, function(html, len, headers, code)
-			for i,data in pairs(GTImport.ProcessHTML(html)) do
+
+	local lastpage = pagecount + startpage - 1
+	for i = 1, pagecount do
+		local curpage = startpage + i - 1
+		local url = "http://www.gametracker.com/server_info/" .. srvip .. "/top_players/?searchipp=50&searchpge=" .. curpage
+
+		http.Fetch(url, function(html)
+			if !GTImport.ProcessHTML(html) then
+				printerr("Server not found")
+				return
+			end
+
+			for i, data in pairs(GTImport.ProcessHTML(html)) do
 				ret[#ret + 1] = data
 			end
-			if page == pagecount then
+
+			if curpage == lastpage then
 				callback(ret)
+
 				return
 			end
 		end, function(err)
-			printerr("HTTP Fetch error: "..err)
+			printerr("HTTP Fetch error: " .. err)
 		end)
 	end
 end
 
-function GTImport.Clean(data) -- I tried using regex. I really did. ;(
+
+function GTImport.Clean(data)
 	local validlines = {}
-	for i,line in pairs(string.Explode("\n", data)) do
-		if string.find(line, "</td>") or string.find(line, "</tr>") or string.find(line, "<td>") or string.find(line, "<tr>") or string.find(line, "<table")
-			or string.find(line, "a href") or string.find(line, "</a>") or string.find(line, "td class=\"c03\"") or string.find(line, "td class=\"c01\"")
-			or string.find(line, "td class=\"c06\"")
-			or #string.Trim(line) <= 0 then continue end
+
+	for i, line in pairs(string.Explode("\n", data)) do
+		if string.find(line, "</td>") or string.find(line, "</tr>") or string.find(line, "<td>") or string.find(line, "<tr>") or string.find(line, "<table") or string.find(line, "a href") or string.find(line, "</a>") or string.find(line, "td class=\"c03\"") or string.find(line, "td class=\"c01\"") or string.find(line, "td class=\"c06\"") or #string.Trim(line) <= 0 then continue end
 		line = string.Trim(line)
-		validlines[#validlines+1] = line
+		validlines[#validlines + 1] = line
 	end
 
 	local ret = {
-		names = {},
-		scores = {},
-		playtimes = {},
+		names     = {},
+		ranks     = {},
+		scores    = {},
+		score_min = {},
+		playtimes = {}
 	}
-	for i, line in pairs(validlines) do
-		if string.find(line, "<td class=\"c02\">") then
-			ret.names[#ret.names + 1] = validlines[i + 1]
-		elseif string.find(line, "<td class=\"c04\">") then
-			ret.scores[#ret.scores + 1] = validlines[i + 1]
-		elseif string.find(line, "<td class=\"c05\">") then
-			ret.playtimes[#ret.playtimes + 1] = validlines[i + 1]
+
+	local map = {
+		[2] = ret.names,
+		[4] = ret.scores,
+		[5] = ret.playtimes,
+		[6] = ret.score_min,
+	}
+
+	local pos = 0
+	for i = 8, #validlines - 8 do
+		local line = validlines[i]
+
+		pos = pos + 1
+
+		if map[pos] then
+			map[pos][ #map[pos] + 1 ] = line
 		end
+
+		if pos == 6 then pos = 0 end
 	end
 
 	local ret2 = {}
 	for i = 1, #ret.names do
-		ret2[#ret2+1] = {name=ret.names[i], score=ret.scores[i], playtime=ret.playtimes[i]}
+		ret2[#ret2 + 1] = {
+			name = ret.names[i],
+			score = ret.scores[i],
+			playtime = ret.playtimes[i],
+			score_min = ret.score_min[i]
+		}
 	end
+
 	return ret2
-end
+end -- I tried using regex. I really did. ;(
 
 function GTImport.ProcessHTML(rawhtml)
 	local tblstart = string.find(rawhtml, "<table class=\"table_lst table_lst_spn\">")
 	local tblend = string.find(rawhtml, "</table>")
-	if (not tblstart) or (not tblend) then printerr("Couldn't find table of data in HTML!") return end
+
+	if (not tblstart) or (not tblend) then
+		printerr("Couldn't find table of data in HTML!")
+
+		return
+	end
 
 	local data = string.sub(rawhtml, tblstart, tblend)
 
