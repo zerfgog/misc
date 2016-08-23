@@ -22,12 +22,14 @@ function GTImport.Run(srvip, pagecount, startpage, callback)
 		local url = "http://www.gametracker.com/server_info/" .. srvip .. "/top_players/?searchipp=50&searchpge=" .. curpage
 
 		http.Fetch(url, function(html)
-			if !GTImport.ProcessHTML(html) then
+			local processed_html = GTImport.ProcessHTML(html)
+
+			if !processed_html then
 				printerr("Server not found")
 				return
 			end
 
-			for i, data in pairs(GTImport.ProcessHTML(html)) do
+			for i, data in pairs(processed_html) do
 				ret[#ret + 1] = data
 			end
 
